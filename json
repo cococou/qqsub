@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+#coding: utf-8
+
+# In[2]:
+
+import urllib.request
+import re
+import sys
+import os
+import getopt
+import json
+
+
+# In[7]:
+
+def Version():
+    print("     ====verison is V3.0, write by kkzou=====")
+    exit()
+
+def OutPut(o,a):
+    #print('{0} {1} '.format(o,a))
+    return(a)
+
+def Usage():
+    st = """
+
+         -v verison 
+         -h help  
+  
+         --api the website address. default:http://192.168.135.11:8080/bigdatams/rest/commonDB       
+         -W   the way you visit the website.you can choose one of them(defalut value is 'list'):
+              [list, save, update]
+              
+
+         -T   the table you want to access,there you can choose one of them :
+              [exam, sample, patient, project, samplecollection, test]  --> only -M list
+              for Analysis Team to search or upload data information,there you can choose one of them:
+              [rawdata, qcdata, analysis, step, report] 
+
+
+         -I   the item in specific Table you want to access,there you can choose one of them in one table : (':'as the separator in multiple items)
+              ------------------------------------------
+              [exam: id, number, testId, testNumber, testCurrent]
+              [patient: id, number, sampleId, sampleNumber]
+              [project: id, number, sampleCollectId,sampleCollectNumber]
+              [samplecollection: id, number, projectId, projectNumber, sampleId, sampleNumber]
+              [sample: id, numbrer, patientNumber, sampleCollectId, sampleCollectNumber, testId, testNumber]
+              [test: id, number, sampleId, sampleNumber]
+              -----------------------------------------
+              [rawdata: testCode, testType, dataFiledir, dataServer, dataFilelist]
+              [qcdata: ]  
+              [analysis: ]
+              [step: ]
+              [report: ]
+
+         -M   the items you want to get from json. support multiple items matching. every key value from json should be split by ":". example: "clinicalDiagnose:reportVersionOptionValue:customerName:typeOptionText". If the -M is nothing, the whole json script will be out. 
+           
+         -U   only for "update":
+             
+         ######example####
+         bigdata.py --api http:* -T sample -I number=S170000948 -M clinicalDiagnose:reportVersionOptionValue:customerName:typeOptionText
+         """
+    print(st)
+    exit()   
+
+# In[8]:
+
+def Defalut_par():
+    Pardic = {
+        'Table': 'NA',
+        'Item' : 'NA',
+        'Match' : 'NA',
+        'Way' : 'list',
+        'Update': 'NA'
+    }
+    return(Pardic)
+
+
+# In[11]:
+
+def PAR(argv):
+    Pardic = Defalut_par()
+    opts, args = getopt.getopt(argv[1:], 'hvW:I:T:M:U:', ['api='])
+    for o, a in opts:
+        if o == ('-h'):
+            Usage()
+            sys.exit(1)
+        elif o == ('-v'):
+            Version()
+            sys.exit(0)
+        elif o == ('-U'):
+            Pardic['Update'] = OutPut(o,a)
+        elif o == ('-W'):
+            Pardic['Way'] = OutPut(o,a)
+        elif o == ('-I'):
+            Pardic['Item'] = OutPut(o,a)
+        elif o == ('-T'):
+            Pardic['Table'] = OutPut(o,a)
+        elif o == ('--api'):
+            Pardic['Api'] = OutPut(o,a)
+        elif o == ('-M'):                      #YOU can input multiple keys in js use ':' to split every word.
+            Pardic['Match'] = OutPut(o,a).split(":")
+        else:
+            print('unhandled option')
+            exit()
+    return(Pardic)
+
+# In[12]:
+
+def get_url(Pardic):
+    Pardic['Item'] = Pardic['Item'].replace(":","&")
+    Pardic['Item'] = Pardic['Item'].replace("/","$")
+    url = '/'.join([Pardic['Api'],Pardic['Way'],Pardic['Table'],Pardic['Item']])
+    if Pardic['Update'] != 'NA':
+        url = '/'.join([url,Pardic['Update']])
+        
+    #print(url)
+    return url
+
+# In[13]:
+def get_info(url):
+    try:
+        response = urllib.request.urlopen(url)
+    except urllib.error.URLError as e:
+        #print(e.reason,file=sys.stderr)
+        exit() 
+    js = response.read().decode('utf8')
+    if not js:
+        return 'Data Form Error'
+    js = json.loads(js)
+    return(js)
+
+def check_key_value(jdict,keyword):
+    global y
+    if isinstance(jdict, list):
+        for element in jdict:
+            check_key_value(element,keyword)
+    elif isinstance(jdict, dict):
+        if keyword in jdict.keys():
+            if 'Not_the_keys' in y:
+                y = jdict[keyword]
+            else:
+                y = y +'	' + jdict[keyword]
+        else:
+            for x in jdict.keys():
+                check_key_value(jdict[x],keyword)
+
+def get_match(jdict,keys):
+    D = {}
+    for key in keys:
+        global y
+        y = 'Not_the_keys'
+        check_key_value(jdict,key)
+        D.update({key:y})
+    return(D)
+
+def main(argv):
+
+    if len(argv)==1:
+        Usage()
+    
+    Pardic = PAR(argv)
+
+    url = get_url(Pardic)
+    js = get_info(url)
+    if Pardic['Match'] != 'NA':
+        match = get_match(js,Pardic['Match'])
+        for i in match.keys():
+            print(i,match[i],sep="\t")
+    else:
+        print(js)
+
+
+# In[ ]:
+
+if __name__ == '__main__':
+    main(sys.argv)
+    #try:
+    #    main(sys.argv)
+    #except:
+    #    Usage()
+
